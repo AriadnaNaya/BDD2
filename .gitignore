@@ -1,0 +1,55 @@
+# ---- Python ----
+# Compiled python files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribución / empaquetado
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environments
+env/
+venv/
+.venv/
+
+# Archivos de configuración y secretos (ejemplo)
+*.env
+.secret
+credentials.json
+
+# ---- Logs ----
+*.log
+
+# ---- Docker ----
+# Ignore build artifacts
+*.tar
+*.img
+*.iso
+*.bin
+
+# En caso de que uses Compose overrides locales (no versionadas)
+docker-compose.override.yml
+
+# ---- IDE / Editor ----
+# Visual Studio Code
+.vscode/
+# PyCharm
+.idea/
+# Eclipse
+.project
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# ---- OS / General ----
+# macOS
+.DS_Store
+.AppleDouble
+.Icon?
+
+# Windows
+Thumbs.db
+desktop.ini

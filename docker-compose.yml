@@ -1,0 +1,29 @@
+# docker-compose.yml
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: mi_ecommerce_mongo
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: mi_ecommerce
+
+  redis:
+    image: redis:latest
+    container_name: mi_ecommerce_redis
+    ports:
+      - "6379:6379"
+
+  app:
+    build: .
+    container_name: mi_ecommerce_app
+    ports:
+      - "5000:5000"
+    environment:
+      # Inyectamos valores para que db_config.py y redis_config.py los tomen
+      MONGO_URI: mongodb://mongodb:27017/mi_ecommerce
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - mongodb
+      - redis

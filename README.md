@@ -201,17 +201,5 @@ Si tu aplicación Flask provee endpoints, puedes hacer pruebas con:
 2. **Clona** o copia este proyecto a tu máquina.  
 3. **Desde la carpeta del proyecto**, corre `docker-compose up --build`.
 
-Redis:
-
-Se usa para sesiones, carritos de compra temporales, y cachés.
-Permite accesos y actualizaciones muy rápidos en memoria.
-Es ideal para datos que no requieren persistencia a largo plazo.
-MongoDB:
-
-Se usa para los datos principales de la aplicación, aquellos que deben persistir en el tiempo.
-Alberga las colecciones para entidades como usuarios, productos, pedidos, etc.
-4. **Abre tu navegador** en [http://localhost:5000](http://localhost:5000).  
-5. **Prueba** los endpoints con cURL, Postman o el propio navegador.  
-6. **Detén** los contenedores con `Ctrl + C` o `docker-compose down`.  
-
-Con eso, tu aplicación Flask (con MongoDB y Redis) debería funcionar sin inconvenientes. ¡Listo para explorar más!
+MongoDB (NoSQL documental): Para almacenar de forma persistente las entidades principales de la aplicación (usuarios, productos, pedidos, etc.).
+Redis (clave-valor en memoria): Para manejar datos temporales como la sesión de usuario y el carrito de compras antes de su confirmación.

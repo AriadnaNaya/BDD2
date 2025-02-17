@@ -5,9 +5,18 @@ from redis_config import get_redis_client
 from bson import ObjectId
 import uuid
 import json
+from crud.crud_usuarios import usuarios_bp
+from crud.crud_productos import productos_bp
+from crud.crud_pedidos import pedidos_bp
 
 app = Flask(__name__)
 app.secret_key = "SECRET_KEY_DE_EJEMPLO"  # Cambiar por algo seguro en producción
+
+
+# Registrar cada blueprint, asociándolos a un prefijo de URL
+app.register_blueprint(usuarios_bp, url_prefix="/usuarios")
+app.register_blueprint(productos_bp, url_prefix="/productos")
+app.register_blueprint(pedidos_bp, url_prefix="/pedidos")
 
 # Conexiones a las BD
 db = get_mongo_client()

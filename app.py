@@ -8,6 +8,7 @@ import json
 from crud.crud_usuarios import usuarios_bp
 from crud.crud_productos import productos_bp
 from crud.crud_pedidos import pedidos_bp
+import redis
 
 app = Flask(__name__)
 app.secret_key = "SECRET_KEY_DE_EJEMPLO"  # Cambiar por algo seguro en producción
@@ -22,38 +23,38 @@ app.register_blueprint(pedidos_bp, url_prefix="/pedidos")
 db = get_mongo_client()
 redis_client = get_redis_client()
 
+
+
+
 @app.before_request
-def asegurar_sesion():
-    """
-    Middleware para asegurarnos de que cada usuario tenga un identificador único de sesión.
-    Podríamos guardar en Redis el estado de la sesión.
-    """
+def ensure_session():
     if 'user_session_id' not in session:
-        # Genera un ID de sesión único y lo guarda en la cookie de sesión
         session['user_session_id'] = str(uuid.uuid4())
 
 @app.route("/")
 def index():
     return "Bienvenido a la plataforma de comercio electrónico."
 
+
+
+redis_client = redis.Redis(host="redis", port=6379, db=0)  # Ajusta según tu configuración
+
 @app.route("/login", methods=["POST"])
 def login():
-    """
-    Login de usuario muy simplificado.
-    Asume que recibe 'email' por POST y, si existe en MongoDB, se inicia la sesión.
-    """
     email = request.form.get("email")
+    db = get_mongo_client()
     usuarios_coll = db["usuarios"]
     usuario = usuarios_coll.find_one({"email": email})
 
     if usuario:
-        # Guardar la información del usuario en Redis usando user_session_id como key
-        session_id = session['user_session_id']
+        session_id = session.get("user_session_id")
+        # Guardar datos de sesión en Redis
         redis_client.hset(f"session:{session_id}", "user_id", str(usuario["_id"]))
         redis_client.hset(f"session:{session_id}", "user_email", usuario["email"])
-        return jsonify({"message": "Usuario logueado correctamente", "user": usuario["email"]})
+        return jsonify({"message": "Usuario logueado", "user": usuario["email"]}), 200
     else:
         return jsonify({"error": "Usuario no encontrado"}), 404
+
 
 @app.route("/logout", methods=["GET"])
 def logout():
@@ -67,40 +68,45 @@ def logout():
 
 @app.route("/agregar_carrito", methods=["POST"])
 def agregar_carrito():
-    """
-    Agrega un producto al carrito en Redis.
-    Espera: product_id, cantidad
-    """
-    session_id = session['user_session_id']
+    session_id = session.get('user_session_id')
+    if not session_id:
+        return jsonify({"error": "No hay sesión activa"}), 401
+
+    cart_key = f"cart:{session_id}"
     product_id = request.form.get("product_id")
     cantidad = int(request.form.get("cantidad", 1))
 
-    # La clave del carrito se compone de "cart:{session_id}"
-    cart_key = f"cart:{session_id}"
+    # Validar que el producto exista en MongoDB
+    db = get_mongo_client()
+    productos_coll = db["productos"]
+    producto = productos_coll.find_one({"_id": ObjectId(product_id)})
+    if not producto:
+        return jsonify({"error": "Producto no encontrado"}), 404
 
-    # Si el producto ya existe, sumamos cantidades
-    existing_qty = redis_client.hget(cart_key, product_id)
-    if existing_qty is not None:
-        cantidad += int(existing_qty)
+    # Agregar o incrementar la cantidad en el carrito en Redis
+    redis_client.hincrby(cart_key, product_id, cantidad)
+    # Establecer/renovar el TTL para el carrito (ej. 30 minutos)
+    redis_client.expire(cart_key, 1800)
 
-    redis_client.hset(cart_key, product_id, cantidad)
-    return jsonify({"message": "Producto agregado al carrito", "product_id": product_id, "cantidad": cantidad})
+    return jsonify({"message": "Producto agregado al carrito"}), 200
+
 
 @app.route("/ver_carrito", methods=["GET"])
 def ver_carrito():
-    """
-    Muestra los productos en el carrito consultando Redis.
-    """
-    session_id = session['user_session_id']
+    session_id = session.get('user_session_id')
+    if not session_id:
+        return jsonify({"error": "No hay sesión activa"}), 401
+
     cart_key = f"cart:{session_id}"
-    cart_items = redis_client.hgetall(cart_key)
+    cart_data = redis_client.hgetall(cart_key)
 
-    # Convertir keys/values de binario a strings
-    resultado = {}
-    for k, v in cart_items.items():
-        resultado[k.decode("utf-8")] = int(v.decode("utf-8"))
+    # Convertir las claves y valores de bytes a strings (y números, en el caso de cantidades)
+    carrito = { key.decode("utf-8"): int(value.decode("utf-8")) for key, value in cart_data.items() }
 
-    return jsonify({"carrito": resultado})
+    # Renovar el TTL del carrito
+    redis_client.expire(cart_key, 1800)
+
+    return jsonify(carrito), 200
 
 @app.route("/confirmar_pedido", methods=["POST"])
 def confirmar_pedido():
@@ -155,6 +161,22 @@ def confirmar_pedido():
     redis_client.delete(cart_key)
 
     return jsonify({"message": "Pedido confirmado", "total": total})
+
+@app.route("/ver_sesion", methods=["GET"])
+def ver_sesion():
+    session_id = session.get("user_session_id")
+    if not session_id:
+        return jsonify({"error": "No hay sesión activa"}), 401
+
+    # Usar el session_id para consultar la sesión en Redis
+    session_key = f"session:{session_id}"
+    session_data = redis_client.hgetall(session_key)
+
+    # Convertir las claves y valores de bytes a string
+    session_dict = {key.decode("utf-8"): value.decode("utf-8") for key, value in session_data.items()}
+
+    return jsonify(session_dict), 200
+
 
 if __name__ == "__main__":
     # Para escuchar en todas las interfaces del contenedor

@@ -183,6 +183,82 @@ def ver_sesion():
 
     return jsonify(session_dict), 200
 
+"""Facturacion"""
+@app.route("/facturar_pedido/<pedido_id>", methods=["POST"])
+def facturar_pedido(pedido_id):
+    """Factura un pedido y registra el pago."""
+    session_id = session.get("user_session_id")
+    if not session_id:
+        return jsonify({"error": "No hay sesión activa"}), 401
+
+    # Obtener usuario autenticado desde Redis
+    user_id = redis_client.hget(f"session:{session_id}", "user_id")
+    if not user_id:
+        return jsonify({"error": "Se debe iniciar sesión para facturar un pedido"}), 401
+
+    user_id = ObjectId(user_id.decode("utf-8"))  # Convertimos de bytes a ObjectId
+
+    pedidos_coll = db["pedidos"]
+    pagos_coll = db["pagos"]
+
+    # Buscar pedido
+    pedido = pedidos_coll.find_one({"_id": ObjectId(pedido_id)})
+    if not pedido:
+        return jsonify({"error": "Pedido no encontrado"}), 404
+
+    # Verificar si el usuario que intenta pagar es el mismo que lo creó
+    if pedido["usuario_id"] != user_id:
+        return jsonify({"error": "No puedes facturar un pedido que no te pertenece"}), 403
+
+    if pedido.get("estado") == "pagado":
+        return jsonify({"error": "El pedido ya fue pagado"}), 400
+
+    # Obtener método de pago
+    metodo_pago = request.form.get("metodo_pago", "Tarjeta de Crédito")
+
+    # Registrar pago en la colección "pagos"
+    pago = {
+        "pedido_id": ObjectId(pedido_id),
+        "usuario_id": user_id,
+        "total_pagado": pedido["total"],
+        "metodo_pago": metodo_pago,
+        "fecha_pago": datetime.utcnow()
+    }
+    pagos_coll.insert_one(pago)
+
+    # Actualizar estado del pedido a "pagado"
+    pedidos_coll.update_one({"_id": ObjectId(pedido_id)}, {"$set": {"estado": "pagado"}})
+
+    return jsonify({
+        "message": "Pago registrado con éxito",
+        "pedido_id": str(pedido_id),
+        "metodo_pago": metodo_pago
+    })
+
+"""Historial de pagos registrados"""
+@app.route("/historial_pagos", methods=["GET"])
+def historial_pagos():
+    """Devuelve la lista de pagos registrados, solo se veran los pagos de los usuario autenticado."""
+    session_id = session.get("user_session_id")
+    if not session_id:
+        return jsonify({"error": "No hay sesión activa"}), 401
+
+    # Obtener usuario autenticado desde Redis
+    user_id = redis_client.hget(f"session:{session_id}", "user_id")
+    if not user_id:
+        return jsonify({"error": "Se debe iniciar sesión para ver tu historial de pagos"}), 401
+
+    user_id = ObjectId(user_id.decode("utf-8"))  # Convertimos de bytes a ObjectId
+
+    pagos_coll = db["pagos"]
+    pagos = list(pagos_coll.find({"usuario_id": user_id}, {"_id": 0}))
+
+    # Convertir fecha a un formato legible
+    for pago in pagos:
+        pago["fecha_pago"] = pago["fecha_pago"].strftime("%Y-%m-%d %H:%M:%S")
+
+    return jsonify({"historial_pagos": pagos})
+
 
 if __name__ == "__main__":
     # Para escuchar en todas las interfaces del contenedor

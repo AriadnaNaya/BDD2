@@ -1,5 +1,6 @@
 # app.py
 from flask import Flask, session, request, redirect, url_for, render_template, jsonify
+from flask_cors import CORS
 from db_config import get_mongo_client
 from redis_config import get_redis_client
 from bson import ObjectId
@@ -18,6 +19,11 @@ app.secret_key = "SECRET_KEY_DE_EJEMPLO"  # Cambiar por algo seguro en producci√
 app.register_blueprint(usuarios_bp, url_prefix="/usuarios")
 app.register_blueprint(productos_bp, url_prefix="/productos")
 app.register_blueprint(pedidos_bp, url_prefix="/pedidos")
+
+
+CORS(app, supports_credentials=True)
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'
+app.config['SESSION_COOKIE_SECURE'] = True
 
 # Conexiones a las BD
 db = get_mongo_client()
